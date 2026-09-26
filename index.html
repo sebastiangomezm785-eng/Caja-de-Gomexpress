@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gomexpress - Control de Caja</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- Firebase SDK (v9/v10 Compat) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0369a1',
+                            700: '#035482',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 font-sans pb-12">
+
+    <!-- LOGIN OVERLAY -->
+    <div id="loginOverlay" class="fixed inset-0 bg-slate-900 bg-opacity-95 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl shadow-2xl p-8 max-w-md w-full border border-slate-200 text-center">
+            <div class="w-16 h-16 bg-brand-500 rounded-2xl flex items-center justify-center mx-auto mb-4 text-white text-2xl shadow-lg shadow-brand-500/30">
+                <i class="fa-solid fa-lock"></i>
+            </div>
+            <h1 class="text-2xl font-bold text-slate-900 mb-1">Gomexpress Caja</h1>
+            <p class="text-slate-500 text-sm mb-6">Ingrese la contraseña para acceder al sistema</p>
+            <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="mb-4">
+                    <input type="password" id="passInput" class="w-full px-4 py-3 rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 focus:border-brand-500 text-center text-lg tracking-widest outline-none transition" placeholder="••••••••" required>
+                </div>
+                <div id="loginError" class="text-red-500 text-sm mb-4 hidden font-medium">
+                    <i class="fa-solid fa-circle-exclamation mr-1"></i> Contraseña incorrecta
+                </div>
+                <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-semibold py-3 px-4 rounded-xl shadow-md transition duration-200">
+                    Ingresar
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MAIN APP CONTENT -->
+    <div id="appContent" class="hidden">
+        <!-- HEADER -->
+        <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-30">
+            <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-brand-600 rounded-xl flex items-center justify-center text-xl font-bold shadow-md">
+                        G
+                    </div>
+                    <div>
+                        <h1 class="text-xl font-bold tracking-wide">Gomexpress - Control de Caja</h1>
+                        <p class="text-xs text-emerald-400 font-semibold"><i class="fa-solid fa-bolt mr-1"></i>Sincronizado en Tiempo Real</p>
+                    </div>
+                </div>
+                
+                <!-- SECTIONS / TABS (SERGIO / JORGE) -->
+                <div class="flex bg-slate-800 p-1 rounded-xl w-full sm:w-auto">
+                    <button id="tabSergio" onclick="switchSection('Sergio')" class="flex-1 sm:flex-none px-6 py-2 rounded-lg font-medium text-sm transition duration-200 text-slate-300 hover:text-white">
+                        <i class="fa-solid fa-user-tie mr-2"></i>Sergio
+                    </button>
+                    <button id="tabJorge" onclick="switchSection('Jorge')" class="flex-1 sm:flex-none px-6 py-2 rounded-lg font-medium text-sm transition duration-200 text-slate-300 hover:text-white">
+                        <i class="fa-solid fa-user-tie mr-2"></i>Jorge
+                    </button>
+                </div>
+            </div>
+        </header>
+
+        <!-- MAIN CONTAINER -->
+        <main class="max-w-7xl mx-auto px-4 mt-6">
+            
+            <!-- SECTION HEADER & BALANCE -->
+            <div class="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                <div>
+                    <span class="text-xs uppercase font-bold tracking-wider text-slate-400">Sección Activa</span>
+                    <h2 id="currentSectionTitle" class="text-3xl font-extrabold text-slate-800">Sergio</h2>
+                </div>
+                
+                <div class="bg-slate-50 border border-slate-200 rounded-2xl px-6 py-3 text-right w-full md:w-auto flex justify-between md:block items-center">
+                    <span class="text-xs font-semibold text-slate-500 uppercase block mb-1">Saldo en Cuentas</span>
+                    <span id="currentBalance" class="text-3xl font-black text-emerald-600">$0.00</span>
+                </div>
+            </div>
+
+            <!-- COLLAPSIBLE ACTION PANELS -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                
+                <!-- REGISTRAR EMPLEADO -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+                    <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-user-plus text-brand-600"></i> Registrar Nuevo Empleado
+                    </h3>
+                    <form onsubmit="handleAddEmployee(event)" class="space-y-3">
+                        <div>
+                            <label class="text-xs font-semibold text-slate-600 mb-1 block">Nombre Completo</label>
+                            <input type="text" id="empName" required placeholder="Ej. Juan Pérez" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs font-semibold text-slate-600 mb-1 block">Tipo de Empleado</label>
+                            <select id="empType" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none">
+                                <option value="Empleado Nómina">Empleado Nómina</option>
+                                <option value="Empleado Operador">Empleado Operador</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="w-full bg-slate-800 hover:bg-slate-900 text-white font-medium py-2 rounded-lg text-sm transition">
+                            Guardar Empleado
+                        </button>
+                    </form>
+                </div>
+
+                <!-- REGISTRAR MOVIMIENTO -->
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 md:col-span-2">
+                    <h3 class="font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-file-invoice-dollar text-brand-600"></i> Registrar Movimiento
+                    </h3>
+                    <form onsubmit="handleAddMovement(event)" class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-xs font-semibold text-slate-600 mb-1 block">Fecha Exacta</label>
+                            <input type="date" id="movDate" required class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none">
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-semibold text-slate-600 mb-1 block">Concepto</label>
+                            <select id="movConcept" onchange="handleConceptChange()" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none">
+                                <option value="Préstamo">Préstamo (Salida)</option>
+                                <option value="Banco">Banco (Salida)</option>
+                                <option value="Casa">Casa (Salida - Operadores)</option>
+                                <option value="Abono">Abono (Entrada)</option>
+                                <option value="Dejó">Dejó (Entrada)</option>
+                                <option value="Otro">Otro (Entrada / Salida)</option>
+                                <option value="Sueldo">Sueldo (Salida)</option>
+                            </select>
+                        </div>
+
+                        <!-- EMPLEADO SELECT WITH AUTOCOMPLETE / SEARCH -->
+                        <div id="empSelectGroup">
+                            <label class="text-xs font-semibold text-slate-600 mb-1 block">Empleado / Camión</label>
+                            <div class="relative">
+                                <input type="text" id="movEmpSearch" placeholder="Buscar empleado..." onfocus="showEmpDropdown()" oninput="filterEmpDropdown()" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none">
+                                <div id="empDropdown" class="absolute z-20 top-full left-0 right-0 bg-white border border-slate-200 rounded-lg mt-1 max-h-40 overflow-y-auto shadow-lg hidden">
+                                    <!-- Options populated dynamically -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- OTRO SUB-OPTIONS -->
+                        <div id="otroGroup" class="hidden sm:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="text-xs font-semibold text-slate-600 mb-1 block">Nombre / Descripción del Concepto</label>
+                                <input type="text" id="movOtroDesc" placeholder="Especificar..." class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="text-xs font-semibold text-slate-600 mb-1 block">Tipo de Movimiento</label>
+                                <select id="movOtroType" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none">
+                                    <option value="Entrada">Entrada (+)</option>
+                                    <option value="Salida">Salida (-)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label class="text-xs font-semibold text-slate-600 mb-1 block">Monto ($)</label>
+                            <input type="number" step="0.01" min="0" id="movAmount" required placeholder="0.00" class="w-full px-3 py-2 text-sm rounded-lg border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none">
+                        </div>
+
+                        <div class="sm:col-span-2">
+                            <button type="submit" class="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium py-2 rounded-lg text-sm transition">
+                                Guardar Movimiento
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- BOTÓN DE NÓMINA SEMANAL -->
+            <div class="mb-8">
+                <button onclick="togglePayrollDrawer()" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-2xl shadow-sm flex items-center justify-between transition">
+                    <span class="flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-week text-xl"></i>
+                        <span>Nómina Semanal (Domingo a Sábado)</span>
+                    </span>
+                    <i id="payrollChevron" class="fa-solid fa-chevron-down transition-transform duration-200"></i>
+                </button>
+
+                <!-- PAYROLL DRAWER -->
+                <div id="payrollDrawer" class="hidden mt-4 bg-white border border-amber-200 rounded-2xl p-6 shadow-md">
+                    <div class="flex justify-between items-center mb-4">
+                        <h4 class="font-bold text-slate-800 text-lg">Cálculo de Nómina Semanal</h4>
+                        <span class="text-xs text-amber-700 bg-amber-50 border border-amber-200 px-3 py-1 rounded-full font-medium">
+                            Solo Empleados Nómina
+                        </span>
+                    </div>
+
+                    <div id="payrollList" class="space-y-4">
+                        <!-- Dynamic payroll rows generated here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- HISTORIAL DE MOVIMIENTOS & BUSCADORES -->
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+                    <div>
+                        <h3 class="font-bold text-slate-800 text-xl">Historial de Entradas y Salidas</h3>
+                        <p class="text-xs text-slate-500">Listado completo de movimientos registrados</p>
+                    </div>
+
+                    <!-- SEARCH BAR -->
+                    <div class="w-full md:w-72 relative">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"></i>
+                        <input type="text" id="historySearch" oninput="renderHistory()" placeholder="Buscar empleado o concepto..." class="w-full pl-9 pr-4 py-2 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-brand-500 outline-none">
+                    </div>
+                </div>
+
+                <!-- TABLE -->
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-200 bg-slate-50 text-slate-500 uppercase text-xs">
+                                <th class="py-3 px-4 font-bold">Fecha</th>
+                                <th class="py-3 px-4 font-bold">Concepto</th>
+                                <th class="py-3 px-4 font-bold">Empleado / Notas</th>
+                                <th class="py-3 px-4 font-bold">Tipo</th>
+                                <th class="py-3 px-4 font-bold text-right">Monto</th>
+                                <th class="py-3 px-4 font-bold text-center">Acción</th>
+                            </tr>
+                        </thead>
+                        <tbody id="historyTableBody" class="divide-y divide-slate-100">
+                            <!-- Dynamic Table Rows -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </main>
+    </div>
+
+    <!-- JAVASCRIPT LOGIC -->
+    <script>
+        // CONFIGURACIÓN REAL DE FIREBASE DE TU PROYECTO
+        const firebaseConfig = {
+            apiKey: "AIzaSyDtwZUoxSHqGpL6mMolPOQvB5PF7LFiBEQ",
+            authDomain: "gomexpress-c.firebaseapp.com",
+            projectId: "gomexpress-c",
+            storageBucket: "gomexpress-c.firebasestorage.app",
+            messagingSenderId: "781717530141",
+            appId: "1:781717530141:web:611a9f48acb716c88e88f4",
+            measurementId: "G-MWTK9N7MHM"
+        };
+
+        // INICIALIZACIÓN DE FIREBASE
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
+        // DESHABILITAR PERSISTENCIA CACHÉ PARA FORZAR TIEMPO REAL MULTI-DISPOSITIVO
+        db.settings({ experimentalForceLongPolling: true });
+
+        // APP STATE
+        let currentSection = 'Sergio';
+        let employees = [];
+        let movements = [];
+        let selectedEmpId = null;
+
+        let empUnsubscribe = null;
+        let movUnsubscribe = null;
+
+        // INICIALIZACIÓN
+        window.onload = () => {
+            const today = new Date().toISOString().split('T')[0];
+            document.getElementById('movDate').value = today;
+
+            if (localStorage.getItem('authenticated') === 'true') {
+                document.getElementById('loginOverlay').classList.add('hidden');
+                document.getElementById('appContent').classList.remove('hidden');
+                initApp();
+            }
+        };
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const pass = document.getElementById('passInput').value;
+            if (pass === 'gomexpresscaja1808') {
+                localStorage.setItem('authenticated', 'true');
+                document.getElementById('loginOverlay').classList.add('hidden');
+                document.getElementById('appContent').classList.remove('hidden');
+                initApp();
+            } else {
+                document.getElementById('loginError').classList.remove('hidden');
+            }
+        }
+
+        function initApp() {
+            switchSection('Sergio');
+        }
+
+        function switchSection(section) {
+            currentSection = section;
+            
+            const btnSergio = document.getElementById('tabSergio');
+            const btnJorge = document.getElementById('tabJorge');
+
+            if (section === 'Sergio') {
+                btnSergio.className = "flex-1 sm:flex-none px-6 py-2 rounded-lg font-medium text-sm transition duration-200 bg-brand-600 text-white shadow-md";
+                btnJorge.className = "flex-1 sm:flex-none px-6 py-2 rounded-lg font-medium text-sm transition duration-200 text-slate-300 hover:text-white";
+            } else {
+                btnJorge.className = "flex-1 sm:flex-none px-6 py-2 rounded-lg font-medium text-sm transition duration-200 bg-brand-600 text-white shadow-md";
+                btnSergio.className = "flex-1 sm:flex-none px-6 py-2 rounded-lg font-medium text-sm transition duration-200 text-slate-300 hover:text-white";
+            }
+
+            document.getElementById('currentSectionTitle').innerText = section;
+            
+            loadDataRealtime();
+        }
+
+        function loadDataRealtime() {
+            // Cancelar suscripciones previas si cambian de pestaña
+            if (empUnsubscribe) empUnsubscribe();
+            if (movUnsubscribe) movUnsubscribe();
+
+            // Escuchar Empleados en Tiempo Real
+            empUnsubscribe = db.collection('sections').doc(currentSection).collection('employees')
+                .onSnapshot(snapshot => {
+                    employees = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderEmpDropdown();
+                    renderPayroll();
+                }, error => {
+                    console.error("Error al sincronizar empleados:", error);
+                });
+
+            // Escuchar Movimientos en Tiempo Real
+            movUnsubscribe = db.collection('sections').doc(currentSection).collection('movements')
+                .orderBy('date', 'desc')
+                .onSnapshot(snapshot => {
+                    movements = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                    renderHistory();
+                    calculateBalance();
+                }, error => {
+                    console.error("Error al sincronizar movimientos:", error);
+                });
+        }
+
+        // EMPLEADOS
+        function handleAddEmployee(e) {
+            e.preventDefault();
+            const name = document.getElementById('empName').value.trim();
+            const type = document.getElementById('empType').value;
+
+            if (!name) return;
+
+            const newEmp = { name, type, debt: 0, createdAt: new Date().toISOString() };
+
+            db.collection('sections').doc(currentSection).collection('employees').add(newEmp)
+                .then(() => {
+                    document.getElementById('empName').value = '';
+                    alert(`Empleado ${name} registrado correctamente.`);
+                })
+                .catch(err => {
+                    alert("Error al guardar empleado: " + err.message);
+                });
+        }
+
+        function renderEmpDropdown() {
+            const dropdown = document.getElementById('empDropdown');
+            dropdown.innerHTML = '';
+
+            if (employees.length === 0) {
+                dropdown.innerHTML = `<div class="p-2 text-xs text-slate-400 text-center">Sin empleados registrados</div>`;
+                return;
+            }
+
+            employees.forEach(emp => {
+                const item = document.createElement('div');
+                item.className = "px-3 py-2 text-sm hover:bg-brand-50 cursor-pointer flex justify-between items-center";
+                item.innerHTML = `
+                    <span class="font-medium text-slate-800">${emp.name}</span>
+                    <span class="text-xs px-2 py-0.5 rounded-full ${emp.type === 'Empleado Nómina' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}">${emp.type}</span>
+                `;
+                item.onclick = () => selectEmployee(emp);
+                dropdown.appendChild(item);
+            });
+        }
+
+        function showEmpDropdown() {
+            document.getElementById('empDropdown').classList.remove('hidden');
+        }
+
+        function filterEmpDropdown() {
+            const search = document.getElementById('movEmpSearch').value.toLowerCase();
+            const items = document.getElementById('empDropdown').children;
+
+            Array.from(items).forEach(item => {
+                const text = item.innerText.toLowerCase();
+                item.style.display = text.includes(search) ? 'flex' : 'none';
+            });
+        }
+
+        function selectEmployee(emp) {
+            selectedEmpId = emp.id;
+            document.getElementById('movEmpSearch').value = emp.name;
+            document.getElementById('empDropdown').classList.add('hidden');
+        }
+
+        document.addEventListener('click', (e) => {
+            const group = document.getElementById('empSelectGroup');
+            if (group && !group.contains(e.target)) {
+                document.getElementById('empDropdown').classList.add('hidden');
+            }
+        });
+
+        // MANEJO DE CONCEPTOS
+        function handleConceptChange() {
+            const concept = document.getElementById('movConcept').value;
+            const empGroup = document.getElementById('empSelectGroup');
+            const otroGroup = document.getElementById('otroGroup');
+
+            if (concept === 'Otro') {
+                otroGroup.classList.remove('hidden');
+            } else {
+                otroGroup.classList.add('hidden');
+            }
+
+            if (concept === 'Dejó') {
+                empGroup.classList.add('hidden');
+            } else {
+                empGroup.classList.remove('hidden');
+            }
+        }
+
+        // MOVIMIENTOS
+        function handleAddMovement(e) {
+            e.preventDefault();
+
+            const date = document.getElementById('movDate').value;
+            const concept = document.getElementById('movConcept').value;
+            const amount = parseFloat(document.getElementById('movAmount').value);
+            const empSearchName = document.getElementById('movEmpSearch').value.trim();
+
+            if (!date || isNaN(amount) || amount <= 0) {
+                alert('Por favor complete todos los campos obligatorios.');
+                return;
+            }
+
+            let isEntry = false;
+            let displayConcept = concept;
+            let empName = empSearchName || 'N/A';
+
+            if (concept === 'Préstamo' || concept === 'Banco' || concept === 'Casa' || concept === 'Sueldo') {
+                isEntry = false;
+            } else if (concept === 'Abono' || concept === 'Dejó') {
+                isEntry = true;
+            } else if (concept === 'Otro') {
+                const otroType = document.getElementById('movOtroType').value;
+                const otroDesc = document.getElementById('movOtroDesc').value.trim();
+                isEntry = (otroType === 'Entrada');
+                displayConcept = otroDesc ? `Otro: ${otroDesc}` : 'Otro';
+            }
+
+            const movement = {
+                date,
+                concept: displayConcept,
+                employeeName: concept === 'Dejó' ? 'N/A' : empName,
+                amount,
+                isEntry,
+                createdAt: new Date().toISOString()
+            };
+
+            db.collection('sections').doc(currentSection).collection('movements').add(movement)
+                .then(() => {
+                    document.getElementById('movAmount').value = '';
+                    document.getElementById('movEmpSearch').value = '';
+                    document.getElementById('movOtroDesc').value = '';
+                    selectedEmpId = null;
+                    alert('Movimiento registrado con éxito.');
+                })
+                .catch(err => {
+                    alert("Error al guardar movimiento: " + err.message);
+                });
+        }
+
+        function deleteMovement(movId) {
+            const confirmed = confirm('¿Está seguro de que desea eliminar este movimiento? Esta acción afectará el historial.');
+            if (!confirmed) return;
+
+            db.collection('sections').doc(currentSection).collection('movements').doc(movId).delete()
+                .catch(err => {
+                    alert("Error al eliminar movimiento: " + err.message);
+                });
+        }
+
+        // HISTORIAL & FILTRO
+        function renderHistory() {
+            const tbody = document.getElementById('historyTableBody');
+            const search = document.getElementById('historySearch').value.toLowerCase();
+
+            tbody.innerHTML = '';
+
+            const filteredMovs = movements.filter(m => 
+                (m.employeeName && m.employeeName.toLowerCase().includes(search)) ||
+                (m.concept && m.concept.toLowerCase().includes(search)) ||
+                (m.date && m.date.includes(search))
+            );
+
+            if (filteredMovs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-6 text-slate-400">No hay movimientos registrados.</td></tr>`;
+                return;
+            }
+
+            filteredMovs.forEach(m => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-slate-50 transition";
+                
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-medium text-slate-700">${m.date}</td>
+                    <td class="py-3 px-4 text-slate-800 font-semibold">${m.concept}</td>
+                    <td class="py-3 px-4 text-slate-600">${m.employeeName}</td>
+                    <td class="py-3 px-4">
+                        <span class="px-2.5 py-1 rounded-full text-xs font-semibold ${m.isEntry ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}">
+                            ${m.isEntry ? 'Entrada (+)' : 'Salida (-)'}
+                        </span>
+                    </td>
+                    <td class="py-3 px-4 text-right font-bold ${m.isEntry ? 'text-emerald-600' : 'text-red-600'}">
+                        ${m.isEntry ? '+' : '-'}$${m.amount.toFixed(2)}
+                    </td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="deleteMovement('${m.id}')" class="text-slate-400 hover:text-red-600 transition p-1">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        // CÁLCULO DE SALDO
+        function calculateBalance() {
+            let total = 0;
+            movements.forEach(m => {
+                if (m.isEntry) {
+                    total += m.amount;
+                } else {
+                    total -= m.amount;
+                }
+            });
+
+            const balanceEl = document.getElementById('currentBalance');
+            balanceEl.innerText = `$${total.toFixed(2)}`;
+            if (total < 0) {
+                balanceEl.className = "text-3xl font-black text-red-600";
+            } else {
+                balanceEl.className = "text-3xl font-black text-emerald-600";
+            }
+        }
+
+        // NÓMINA DRAWER
+        function togglePayrollDrawer() {
+            const drawer = document.getElementById('payrollDrawer');
+            const chevron = document.getElementById('payrollChevron');
+
+            if (drawer.classList.contains('hidden')) {
+                drawer.classList.remove('hidden');
+                chevron.classList.add('rotate-180');
+            } else {
+                drawer.classList.add('hidden');
+                chevron.classList.remove('rotate-180');
+            }
+        }
+
+        function renderPayroll() {
+            const container = document.getElementById('payrollList');
+            container.innerHTML = '';
+
+            const nominaEmps = employees.filter(e => e.type === 'Empleado Nómina');
+
+            if (nominaEmps.length === 0) {
+                container.innerHTML = `<p class="text-sm text-slate-400 text-center py-4">No hay empleados registrados de tipo "Empleado Nómina".</p>`;
+                return;
+            }
+
+            nominaEmps.forEach(emp => {
+                const card = document.createElement('div');
+                card.className = "bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-4 gap-4 items-center";
+                
+                card.innerHTML = `
+                    <div>
+                        <h5 class="font-bold text-slate-800">${emp.name}</h5>
+                        <span class="text-xs text-slate-500">Sueldo Base & Préstamos</span>
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-slate-500 block mb-1">Sueldo Base ($)</label>
+                        <input type="number" id="pay_salary_${emp.id}" placeholder="0.00" class="w-full px-3 py-1.5 text-sm border rounded-lg bg-white">
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-slate-500 block mb-1">Prestado en la Semana ($)</label>
+                        <input type="number" id="pay_loan_${emp.id}" placeholder="0.00" class="w-full px-3 py-1.5 text-sm border rounded-lg bg-white">
+                    </div>
+
+                    <div>
+                        <label class="text-xs text-slate-500 block mb-1">Monto a Abonar ($)</label>
+                        <input type="number" id="pay_payback_${emp.id}" placeholder="0.00" class="w-full px-3 py-1.5 text-sm border rounded-lg bg-white">
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+    </script>
+</body>
+</html>
